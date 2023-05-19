@@ -1,4 +1,11 @@
 # reborn_ii_pilot
+
+## Development Settings 
+```
+$ flutter pub get
+$ flutter run -d ios || android
+```
+
 ## 機能
 - OpenStreetMapの地図表（オフライン対応）
 - Arduinoからbluetooth通信を行なって期待情報を共有して取得する
