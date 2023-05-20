@@ -12,4 +12,5 @@ $ flutter run -d ios || android
 
 ## 以下簡易デザイン
 
-<img width="574" alt="スクリーンショット 2023-05-19 1 06 47" src="https://github.com/teikyo-skyproject/reborn-II-pilot/assets/55475145/cfd7b9a3-e401-459b-8917-e3bb4d82bc14">
+
+<img width="353" alt="スクリーンショット 2023-05-20 16 16 54" src="https://github.com/teikyo-skyproject/reborn-II-pilot/assets/55475145/2b45e1fc-7f95-4215-bb62-b9ef5404e669">
