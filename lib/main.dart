@@ -35,6 +35,7 @@ class _MainState extends State<Main> {
   LocationPermission permission = LocationPermission.denied;
   MapController mapController = MapController();
   double currentHeading = 0;
+  bool isMeasuring = false;
 
   @override
   void initState() {
@@ -81,6 +82,12 @@ class _MainState extends State<Main> {
     updateLocation();
   }
 
+  void handleMeasurement() {
+    setState(() {
+      isMeasuring = !isMeasuring;
+    });
+  }
+
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: ThemeData(
@@ -122,6 +129,32 @@ class _MainState extends State<Main> {
               ],
             ),
             Align(
+              alignment: Alignment.topLeft,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    child: Padding(
+                      padding: EdgeInsets.all(15.0),
+                      child: Column(children: [
+                        SizedBox(height: 10),
+                        ElevatedButton(
+                          onPressed: handleMeasurement,
+                          child: Text(isMeasuring ? '計測終了' : '計測開始',
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: Size(120, 40),
+                          ),
+                        )
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Align(
               alignment: Alignment.bottomRight,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -157,7 +190,7 @@ class _MainState extends State<Main> {
                       child: Container(
                         color: Colors.white,
                         child: Padding(
-                          padding: EdgeInsets.all(15),
+                          padding: EdgeInsets.all(15.0),
                           child: Column(children: [
                             Text(
                               'スピード: $speed KM/H',
