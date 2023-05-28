@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/plugin_api.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
+import 'dart:math';
+import 'dart:ui' as ui;
+import 'package:flutter_svg/flutter_svg.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await FlutterMapTileCaching.initialise(); // New line
+  await FMTC.instance('mapStore').manage.createAsync(); // New line
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
@@ -21,28 +26,100 @@ class Main extends StatefulWidget {
 }
 
 class _MainState extends State<Main> {
-  LatLng _center = LatLng(35.681236, 139.767125);
-  String speed = '速度: 0000.0000';
-  String power = 'パワー: 0000.0000';
+  List<CircleMarker> circlemarkers = [];
+  LatLng currentPosition = LatLng(35.28891762055586, 136.2466526902753);
+  bool serviceEnabled = false;
+  String text = '';
+  String power = '000.000';
+  String speed = '000.000';
+  LocationPermission permission = LocationPermission.denied;
+  MapController mapController = MapController();
+  double currentHeading = 0;
 
   @override
+  void initState() {
+    super.initState();
+    mapController = MapController();
+    updateLocation();
+  }
+
+  void updateLocation() async {
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() {
+        text = '位置情報が有効になっていません';
+      });
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        setState(() {
+          text = '位置情報の許可がありません';
+        });
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      setState(() {
+        text = '位置情報の許可がありません';
+      });
+      return;
+    }
+
+    Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+    setState(() {
+      text = '緯度: ${position.latitude}, 経度: ${position.longitude}';
+      currentPosition = LatLng(position.latitude, position.longitude);
+      currentHeading = position.heading;
+    });
+    mapController.move(currentPosition, 14.0);
+    updateLocation();
+  }
+
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'reborn-II-pilot',
-      theme: ThemeData.light(useMaterial3: true),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
       home: Scaffold(
         body: FlutterMap(
+          mapController: mapController,
           options: MapOptions(
-            center: _center,
-            zoom: 10.0,
+            center: currentPosition,
+            zoom: 14.0,
             interactiveFlags: InteractiveFlag.all,
             enableScrollWheel: true,
             scrollWheelVelocity: 0.00001,
           ),
           children: [
             TileLayer(
-              urlTemplate: "https://tile.openstreetmap.jp/{z}/{x}/{y}.png",
-              userAgentPackageName: 'land_place',
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'dev.fleaflet.flutter_map.example',
+              tileProvider: FMTC.instance('mapStore').getTileProvider(),
+            ),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: currentPosition,
+                  width: 60,
+                  height: 60,
+                  builder: (ctx) => Transform.rotate(
+                    angle: currentHeading * pi / 180,
+                    child: SvgPicture.asset(
+                      'images/airplane.svg',
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  anchorPos: AnchorPos.align(AnchorAlign.center),
+                ),
+              ],
             ),
             Align(
               alignment: Alignment.bottomRight,
@@ -52,7 +129,9 @@ class _MainState extends State<Main> {
                   Padding(
                     padding: EdgeInsets.all(15.0),
                     child: ElevatedButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          updateLocation();
+                        },
                         style: ElevatedButton.styleFrom(
                           primary: Colors.blue[300],
                           shape: CircleBorder(),
@@ -71,7 +150,28 @@ class _MainState extends State<Main> {
               alignment: Alignment.bottomLeft,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Padding(
+                      padding: EdgeInsets.all(15.0),
+                      child: Container(
+                        color: Colors.white,
+                        child: Padding(
+                          padding: EdgeInsets.all(15),
+                          child: Column(children: [
+                            Text(
+                              'スピード: $speed KM/H',
+                              style: TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'パワー: $power W',
+                              style: TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold),
+                            )
+                          ]),
+                        ),
+                      )),
                   Padding(
                     padding: EdgeInsets.only(bottom: 30, left: 20),
                     child: Container(
@@ -81,21 +181,16 @@ class _MainState extends State<Main> {
                           Padding(
                             padding: EdgeInsets.all(10),
                             child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    speed,
-                                    style: TextStyle(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  text,
+                                  style: TextStyle(
                                       fontSize: 20,
-                                    ),
-                                  ),
-                                  Text(
-                                    power,
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                    ),
-                                  ),
-                                ]),
+                                      fontWeight: FontWeight.bold),
+                                )
+                              ],
+                            ),
                           )
                         ],
                       ),
