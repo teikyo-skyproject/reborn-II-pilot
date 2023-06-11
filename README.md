@@ -1,4 +1,6 @@
 # reborn_ii_pilot
+![EzeUaxdW0MwEGMy1685674367_1685674410](https://github.com/teikyo-skyproject/reborn-II-pilot/assets/55475145/0f9125ec-cd4f-409a-8d79-74f8d32e01c6)
+
 
 ## Development Settings 
 ```
