@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -7,6 +10,9 @@ import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:intl/intl.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,22 +32,66 @@ class Main extends StatefulWidget {
 }
 
 class _MainState extends State<Main> {
-  List<CircleMarker> circlemarkers = [];
-  LatLng currentPosition = LatLng(35.28891762055586, 136.2466526902753);
-  bool serviceEnabled = false;
-  String text = '';
-  String power = '000.000';
-  String speed = '000.000';
-  LocationPermission permission = LocationPermission.denied;
-  MapController mapController = MapController();
-  double currentHeading = 0;
-  bool isMeasuring = false;
+  // ローカル通知setup
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  LatLng currentPosition = LatLng(35.28891762055586, 136.2466526902753); // 現在地
+  bool serviceEnabled = false; // 位置情報の有効
+  String text = ''; // 緯度・経度
+  String power = '000.000'; // パワー
+  String speed = '000.000'; // スピード
+  LocationPermission permission = LocationPermission.denied; // 位置情報の許可
+  MapController mapController = MapController(); // マップコントローラー
+  double currentHeading = 0; // 現在の方角
+  bool isMeasuring = false; // 計測開始・停止のフラグ
+  List<LatLng> coordinates = []; //座標を格納するリスト
+  bool isTimerStarted = false;
+  int elapsedTime = 0;
+  Timer? timer;
 
   @override
   void initState() {
     super.initState();
+    _requestIOSPermission();
+    _initializePlatformSpecifics();
     mapController = MapController();
     updateLocation();
+  }
+
+  void _requestIOSPermission() {
+    flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()!
+        .requestPermissions(alert: false, badge: true, sound: false);
+  }
+
+  void _initializePlatformSpecifics() {
+    var initializationSettingsIOS = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: false,
+      onDidReceiveLocalNotification: (id, title, body, payload) => {},
+    );
+    var initializationSettings =
+        InitializationSettings(iOS: initializationSettingsIOS);
+    flutterLocalNotificationsPlugin.initialize(initializationSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse res) {
+      debugPrint('payload:${res.payload}');
+    });
+  }
+
+  Future<void> _showNotification(String title, String body) async {
+    var iosChannelSpecifics = DarwinNotificationDetails();
+    var platformChannelSpecifics =
+        NotificationDetails(iOS: iosChannelSpecifics);
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      title,
+      body,
+      platformChannelSpecifics,
+      payload: 'New Payload',
+    );
   }
 
   void updateLocation() async {
@@ -79,12 +129,39 @@ class _MainState extends State<Main> {
       currentHeading = position.heading;
     });
     mapController.move(currentPosition, 14.0);
+    if (isMeasuring) {
+      coordinates.add(currentPosition);
+    }
+
     updateLocation();
   }
 
   void handleMeasurement() {
     setState(() {
+      tz.initializeTimeZones();
+      var jpTime = tz.TZDateTime.now(tz.getLocation('Asia/Tokyo'));
+      var formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
+      String currentTime = formatter.format(jpTime);
+      if (!isMeasuring) {
+        coordinates = [];
+        elapsedTime = 0;
+        handleTimer();
+        _showNotification('計測開始', currentTime);
+      }
+      if (isMeasuring) {
+        timer?.cancel();
+        _showNotification('計測終了', currentTime);
+      }
       isMeasuring = !isMeasuring;
+      isTimerStarted = !isTimerStarted;
+    });
+  }
+
+  void handleTimer() {
+    timer = Timer.periodic(Duration(seconds: 1), (Timer timer) {
+      setState(() {
+        elapsedTime++;
+      });
     });
   }
 
@@ -126,6 +203,12 @@ class _MainState extends State<Main> {
                   ),
                   anchorPos: AnchorPos.align(AnchorAlign.center),
                 ),
+              ],
+            ),
+            PolylineLayer(
+              polylines: [
+                Polyline(
+                    points: coordinates, color: Colors.blue, strokeWidth: 3.0)
               ],
             ),
             Align(
@@ -192,6 +275,11 @@ class _MainState extends State<Main> {
                         child: Padding(
                           padding: EdgeInsets.all(15.0),
                           child: Column(children: [
+                            Text(
+                              '経過時間： $elapsedTime 秒',
+                              style: TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
                             Text(
                               'スピード: $speed KM/H',
                               style: TextStyle(
