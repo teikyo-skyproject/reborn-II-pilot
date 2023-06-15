@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -7,12 +7,16 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
-import 'dart:math';
-import 'dart:ui' as ui;
 import 'package:flutter_svg/flutter_svg.dart';
+// ignore: depend_on_referenced_packages
 import 'package:intl/intl.dart';
+// ignore: depend_on_referenced_packages
 import 'package:timezone/data/latest.dart' as tz;
+// ignore: depend_on_referenced_packages
 import 'package:timezone/timezone.dart' as tz;
+// ignore: depend_on_referenced_packages
+import 'package:path_provider/path_provider.dart';
+import 'package:logger/logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,12 +26,15 @@ void main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]).then((_) {
-    runApp(Main());
+    runApp(const Main());
   });
 }
 
 class Main extends StatefulWidget {
+  const Main({super.key});
+
   @override
+  // ignore: library_private_types_in_public_api
   _MainState createState() => _MainState();
 }
 
@@ -35,6 +42,11 @@ class _MainState extends State<Main> {
   // ローカル通知setup
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+  // ロガー
+  final logger = Logger(
+    printer: PrettyPrinter(),
+    output: MeasurementLogger(),
+  );
 
   LatLng currentPosition = LatLng(35.28891762055586, 136.2466526902753); // 現在地
   bool serviceEnabled = false; // 位置情報の有効
@@ -60,21 +72,30 @@ class _MainState extends State<Main> {
   }
 
   void _requestIOSPermission() {
-    flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()!
-        .requestPermissions(alert: false, badge: true, sound: false);
+    if (Platform.isIOS) {
+      flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()!
+          .requestPermissions(alert: false, badge: true, sound: false);
+    } else if (Platform.isAndroid) {
+      flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()!
+          .requestPermission();
+    }
   }
 
   void _initializePlatformSpecifics() {
+    var initializationSettingsAndroid =
+        const AndroidInitializationSettings('@mipmap/ic_launcher');
     var initializationSettingsIOS = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: false,
       onDidReceiveLocalNotification: (id, title, body, payload) => {},
     );
-    var initializationSettings =
-        InitializationSettings(iOS: initializationSettingsIOS);
+    var initializationSettings = InitializationSettings(
+        android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
     flutterLocalNotificationsPlugin.initialize(initializationSettings,
         onDidReceiveNotificationResponse: (NotificationResponse res) {
       debugPrint('payload:${res.payload}');
@@ -82,9 +103,19 @@ class _MainState extends State<Main> {
   }
 
   Future<void> _showNotification(String title, String body) async {
-    var iosChannelSpecifics = DarwinNotificationDetails();
-    var platformChannelSpecifics =
-        NotificationDetails(iOS: iosChannelSpecifics);
+    var iosChannelSpecifics = const DarwinNotificationDetails();
+    var androidChannelSpecifics = const AndroidNotificationDetails(
+      'CHANNEL_ID',
+      'CHANNEL_NAME',
+      channelDescription: "CHANNEL_DESCRIPTION",
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: false,
+      timeoutAfter: 5000,
+      styleInformation: DefaultStyleInformation(true, true),
+    );
+    var platformChannelSpecifics = NotificationDetails(
+        android: androidChannelSpecifics, iOS: iosChannelSpecifics);
     await flutterLocalNotificationsPlugin.show(
       0,
       title,
@@ -127,6 +158,7 @@ class _MainState extends State<Main> {
       text = '緯度: ${position.latitude}, 経度: ${position.longitude}';
       currentPosition = LatLng(position.latitude, position.longitude);
       currentHeading = position.heading;
+      logger.i('Coordinates: $coordinates, Power: $power, Speed: $speed');
     });
     mapController.move(currentPosition, 14.0);
     if (isMeasuring) {
@@ -158,13 +190,14 @@ class _MainState extends State<Main> {
   }
 
   void handleTimer() {
-    timer = Timer.periodic(Duration(seconds: 1), (Timer timer) {
+    timer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
       setState(() {
         elapsedTime++;
       });
     });
   }
 
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: ThemeData(
@@ -217,22 +250,20 @@ class _MainState extends State<Main> {
                 mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    child: Padding(
-                      padding: EdgeInsets.all(15.0),
-                      child: Column(children: [
-                        SizedBox(height: 10),
-                        ElevatedButton(
-                          onPressed: handleMeasurement,
-                          child: Text(isMeasuring ? '計測終了' : '計測開始',
-                              style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: Size(120, 40),
-                          ),
-                        )
-                      ]),
-                    ),
+                  Padding(
+                    padding: const EdgeInsets.all(15.0),
+                    child: Column(children: [
+                      const SizedBox(height: 10),
+                      ElevatedButton(
+                        onPressed: handleMeasurement,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(120, 40),
+                        ),
+                        child: Text(isMeasuring ? '計測終了' : '計測開始',
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                      )
+                    ]),
                   ),
                 ],
               ),
@@ -243,17 +274,17 @@ class _MainState extends State<Main> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Padding(
-                    padding: EdgeInsets.all(15.0),
+                    padding: const EdgeInsets.all(15.0),
                     child: ElevatedButton(
                         onPressed: () {
                           updateLocation();
                         },
                         style: ElevatedButton.styleFrom(
-                          primary: Colors.blue[300],
-                          shape: CircleBorder(),
-                          padding: EdgeInsets.all(20),
+                          backgroundColor: Colors.blue[300],
+                          shape: const CircleBorder(),
+                          padding: const EdgeInsets.all(20),
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.location_on,
                           color: Colors.white,
                           size: 30,
@@ -269,44 +300,44 @@ class _MainState extends State<Main> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                      padding: EdgeInsets.all(15.0),
+                      padding: const EdgeInsets.all(15.0),
                       child: Container(
                         color: Colors.white,
                         child: Padding(
-                          padding: EdgeInsets.all(15.0),
+                          padding: const EdgeInsets.all(15.0),
                           child: Column(children: [
                             Text(
                               '経過時間： $elapsedTime 秒',
-                              style: TextStyle(
+                              style: const TextStyle(
                                   fontSize: 20, fontWeight: FontWeight.bold),
                             ),
                             Text(
                               'スピード: $speed KM/H',
-                              style: TextStyle(
+                              style: const TextStyle(
                                   fontSize: 20, fontWeight: FontWeight.bold),
                             ),
                             Text(
                               'パワー: $power W',
-                              style: TextStyle(
+                              style: const TextStyle(
                                   fontSize: 20, fontWeight: FontWeight.bold),
                             )
                           ]),
                         ),
                       )),
                   Padding(
-                    padding: EdgeInsets.only(bottom: 30, left: 20),
+                    padding: const EdgeInsets.only(bottom: 30, left: 20),
                     child: Container(
                       color: Colors.white,
                       child: Column(
                         children: [
                           Padding(
-                            padding: EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(10),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   text,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold),
                                 )
@@ -324,5 +355,25 @@ class _MainState extends State<Main> {
         ),
       ),
     );
+  }
+}
+
+class MeasurementLogger extends LogOutput {
+  @override
+  void output(OutputEvent event) {
+    _writeToLogFile(event);
+  }
+
+  Future<File> _getLocalFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/measurement.log');
+  }
+
+  void _writeToLogFile(OutputEvent event) async {
+    final file = await _getLocalFile();
+    final sink = file.openWrite(mode: FileMode.append);
+    event.lines.forEach(sink.writeln);
+    await sink.flush();
+    await sink.close();
   }
 }
