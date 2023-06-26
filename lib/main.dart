@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:geolocator/geolocator.dart';
+// import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -14,9 +17,6 @@ import 'package:intl/intl.dart';
 import 'package:timezone/data/latest.dart' as tz;
 // ignore: depend_on_referenced_packages
 import 'package:timezone/timezone.dart' as tz;
-// ignore: depend_on_referenced_packages
-import 'package:path_provider/path_provider.dart';
-import 'package:logger/logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,18 +42,24 @@ class _MainState extends State<Main> {
   // ローカル通知setup
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
-  // ロガー
-  final logger = Logger(
-    printer: PrettyPrinter(),
-    output: MeasurementLogger(),
-  );
+
+  // Bluetooth state
+  final flutterReactiveBle = FlutterReactiveBle();
+  String deviceId = 'CD:4A:79:D4:64:26';
+  final Uuid serviceUuid = Uuid.parse('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+  final Uuid TxCharacteristicUuid =
+      Uuid.parse('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+  bool _connected = false;
+  String log = '';
 
   LatLng currentPosition = LatLng(35.28891762055586, 136.2466526902753); // 現在地
-  bool serviceEnabled = false; // 位置情報の有効
   String text = ''; // 緯度・経度
-  String power = '000.000'; // パワー
-  String speed = '000.000'; // スピード
-  LocationPermission permission = LocationPermission.denied; // 位置情報の許可
+  String power = ''; // パワー
+  String rpm = ''; // 回転数
+  String speed = ''; // スピード
+  String recordingTime = '00:00:00'; // 記録時間
+  String lat = '00.000000'; // 緯度
+  String lng = '000.000000'; // 経度
   MapController mapController = MapController(); // マップコントローラー
   double currentHeading = 0; // 現在の方角
   bool isMeasuring = false; // 計測開始・停止のフラグ
@@ -68,7 +74,6 @@ class _MainState extends State<Main> {
     _requestIOSPermission();
     _initializePlatformSpecifics();
     mapController = MapController();
-    updateLocation();
   }
 
   void _requestIOSPermission() {
@@ -125,49 +130,6 @@ class _MainState extends State<Main> {
     );
   }
 
-  void updateLocation() async {
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() {
-        text = '位置情報が有効になっていません';
-      });
-      return;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        setState(() {
-          text = '位置情報の許可がありません';
-        });
-        return;
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      setState(() {
-        text = '位置情報の許可がありません';
-      });
-      return;
-    }
-
-    Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
-    setState(() {
-      text = '緯度: ${position.latitude}, 経度: ${position.longitude}';
-      currentPosition = LatLng(position.latitude, position.longitude);
-      currentHeading = position.heading;
-      logger.i('Coordinates: $coordinates, Power: $power, Speed: $speed');
-    });
-    mapController.move(currentPosition, 14.0);
-    if (isMeasuring) {
-      coordinates.add(currentPosition);
-    }
-
-    updateLocation();
-  }
-
   void handleMeasurement() {
     setState(() {
       tz.initializeTimeZones();
@@ -197,6 +159,40 @@ class _MainState extends State<Main> {
     });
   }
 
+  _connectToDevice(String id) async {
+    final connection = flutterReactiveBle.connectToDevice(
+        id: id, connectionTimeout: Duration(seconds: 10));
+    connection.listen((connectionState) {
+      setState(() {
+        log = 'Connection state: $connectionState';
+      });
+      if (connectionState.connectionState == DeviceConnectionState.connected) {
+        _connected = true;
+        setState(() {
+          log = 'Connected';
+        });
+        flutterReactiveBle.requestMtu(deviceId: id, mtu: 250);
+        final TxCharacteristic = QualifiedCharacteristic(
+            characteristicId: TxCharacteristicUuid,
+            serviceId: serviceUuid,
+            deviceId: id);
+        final subs = flutterReactiveBle
+            .subscribeToCharacteristic(TxCharacteristic)
+            .listen((data) {
+          setState(() {
+            log = '${DateTime.now()}: ${String.fromCharCodes(data)}';
+            power = String.fromCharCodes(data).split(',')[1];
+            rpm = String.fromCharCodes(data).split(',')[2];
+            speed = String.fromCharCodes(data).split(',')[3];
+            currentPosition = LatLng(
+                double.parse(String.fromCharCodes(data).split(',')[4]),
+                double.parse(String.fromCharCodes(data).split(',')[5]));
+          });
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -204,176 +200,157 @@ class _MainState extends State<Main> {
         primarySwatch: Colors.blue,
       ),
       home: Scaffold(
-        body: FlutterMap(
-          mapController: mapController,
-          options: MapOptions(
-            center: currentPosition,
-            zoom: 14.0,
-            interactiveFlags: InteractiveFlag.all,
-            enableScrollWheel: true,
-            scrollWheelVelocity: 0.00001,
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'dev.fleaflet.flutter_map.example',
-              tileProvider: FMTC.instance('mapStore').getTileProvider(),
+          body: Stack(
+        children: [
+          FlutterMap(
+            mapController: mapController,
+            options: MapOptions(
+              center: currentPosition,
+              zoom: 8.0,
+              interactiveFlags: InteractiveFlag.all,
+              enableScrollWheel: true,
+              scrollWheelVelocity: 0.00001,
             ),
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: currentPosition,
-                  width: 60,
-                  height: 60,
-                  builder: (ctx) => Transform.rotate(
-                    angle: currentHeading * pi / 180,
-                    child: SvgPicture.asset(
-                      'images/airplane.svg',
-                      width: 60,
-                      height: 60,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  anchorPos: AnchorPos.align(AnchorAlign.center),
-                ),
-              ],
-            ),
-            PolylineLayer(
-              polylines: [
-                Polyline(
-                    points: coordinates, color: Colors.blue, strokeWidth: 3.0)
-              ],
-            ),
-            Align(
-              alignment: Alignment.topLeft,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(15.0),
-                    child: Column(children: [
-                      const SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: handleMeasurement,
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(120, 40),
-                        ),
-                        child: Text(isMeasuring ? '計測終了' : '計測開始',
-                            style: const TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold)),
-                      )
-                    ]),
-                  ),
-                ],
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'dev.fleaflet.flutter_map.example',
+                tileProvider: FMTC.instance('mapStore').getTileProvider(),
               ),
-            ),
-            Align(
-              alignment: Alignment.bottomRight,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(15.0),
-                    child: ElevatedButton(
-                        onPressed: () {
-                          updateLocation();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[300],
-                          shape: const CircleBorder(),
-                          padding: const EdgeInsets.all(20),
-                        ),
-                        child: const Icon(
-                          Icons.location_on,
-                          color: Colors.white,
-                          size: 30,
-                        )),
-                  )
-                ],
-              ),
-            ),
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                      padding: const EdgeInsets.all(15.0),
-                      child: Container(
-                        color: Colors.white,
-                        child: Padding(
-                          padding: const EdgeInsets.all(15.0),
-                          child: Column(children: [
-                            Text(
-                              '経過時間： $elapsedTime 秒',
-                              style: const TextStyle(
-                                  fontSize: 20, fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              'スピード: $speed KM/H',
-                              style: const TextStyle(
-                                  fontSize: 20, fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              'パワー: $power W',
-                              style: const TextStyle(
-                                  fontSize: 20, fontWeight: FontWeight.bold),
-                            )
-                          ]),
-                        ),
-                      )),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 30, left: 20),
-                    child: Container(
-                      color: Colors.white,
-                      child: Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  text,
-                                  style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold),
-                                )
-                              ],
-                            ),
-                          )
-                        ],
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: currentPosition,
+                    width: 60,
+                    height: 60,
+                    builder: (ctx) => Transform.rotate(
+                      angle: currentHeading * pi / 180,
+                      child: SvgPicture.asset(
+                        'images/airplane.svg',
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.contain,
                       ),
                     ),
-                  )
+                    anchorPos: AnchorPos.align(AnchorAlign.center),
+                  ),
                 ],
               ),
-            )
-          ],
-        ),
-      ),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                      points: coordinates, color: Colors.blue, strokeWidth: 3.0)
+                ],
+              ),
+            ],
+          ),
+          Positioned(
+            left: 16,
+            top: 16,
+            child: Container(
+              child: Padding(
+                  padding: EdgeInsets.all(10.0),
+                  child: Column(
+                    children: [
+                      if (_connected)
+                        Column(
+                          children: [
+                            ElevatedButton(
+                              onPressed: handleMeasurement,
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size(120, 40),
+                              ),
+                              child: Text(isMeasuring ? '計測終了' : '計測開始',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  )),
+                            ),
+                            Container(
+                              color: Colors.white,
+                              child: Padding(
+                                padding: EdgeInsets.all(12.0),
+                                child: Text('経過時間： $elapsedTime s',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                            )
+                          ],
+                        )
+                      else
+                        ElevatedButton(
+                          onPressed: () {
+                            _connectToDevice(deviceId);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(120, 40),
+                          ),
+                          child: Text('Bluetooth接続',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              )),
+                        )
+                    ],
+                  )),
+            ),
+          ),
+          Positioned(
+              right: 16,
+              top: 25,
+              child: Container(
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(10.0),
+                  child: Text('パワー: $power w',
+                      style: const TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.bold,
+                      )),
+                ),
+              )),
+          Positioned(
+              left: 16,
+              bottom: 16,
+              child: Column(
+                children: [
+                  Text('$log'),
+                  Container(
+                    color: Colors.white,
+                    child: Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: 120,
+                        ),
+                        child: Text('スピード： $speed m/s',
+                            style: TextStyle(
+                              fontSize: 25,
+                              fontWeight: FontWeight.bold,
+                            )),
+                      ),
+                    ),
+                  ),
+                ],
+              )),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: Container(
+              color: Colors.white,
+              child: Padding(
+                padding: const EdgeInsets.all(10.0),
+                child: Text('ペラ回転数： $rpm rpm',
+                    style: const TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.bold,
+                    )),
+              ),
+            ),
+          )
+        ],
+      )),
     );
-  }
-}
-
-class MeasurementLogger extends LogOutput {
-  @override
-  void output(OutputEvent event) {
-    _writeToLogFile(event);
-  }
-
-  Future<File> _getLocalFile() async {
-    final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/measurement.log');
-  }
-
-  void _writeToLogFile(OutputEvent event) async {
-    final file = await _getLocalFile();
-    final sink = file.openWrite(mode: FileMode.append);
-    event.lines.forEach(sink.writeln);
-    await sink.flush();
-    await sink.close();
   }
 }
