@@ -1,6 +1,4 @@
 # reborn_ii_pilot
-![EzeUaxdW0MwEGMy1685674367_1685674410](https://github.com/teikyo-skyproject/reborn-II-pilot/assets/55475145/0f9125ec-cd4f-409a-8d79-74f8d32e01c6)
-
 
 ## Development Settings 
 ```
@@ -11,6 +9,7 @@ $ flutter run -d ios || android
 ## 機能
 - OpenStreetMapの地図表（オフライン対応）
 - Arduinoからbluetooth通信を行なって期待情報を共有して取得する
+- 計測開始・停止（開始でデータの蓄積・停止で蓄積データのファイル保存）
 
 ## 以下簡易デザイン
 

@@ -30,6 +30,9 @@ class _MainScreenState extends State<MainScreen> {
   int elapsedTime = 0;
   Timer? timer;
   List<LatLng> coordinates = [];
+  String rpm = 'EEE.EE';
+  String power = 'EEE.EE';
+  String speed = 'EEE.EE';
 
   // Map Setup
   MapController mapController = MapController();
@@ -40,6 +43,7 @@ class _MainScreenState extends State<MainScreen> {
     _requestIOSPermission();
     _initializePlatformSpecifics();
     mapController = MapController();
+    lifecycle();
   }
 
   void _requestIOSPermission() {
@@ -96,6 +100,16 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  void lifecycle() {
+    timer = Timer.periodic(Duration(milliseconds: 500), (timer) {
+      setState(() {
+        rpm = Provider.of<BluetoothProvider>(context, listen: true).rpm;
+        power = Provider.of<BluetoothProvider>(context, listen: true).power;
+        speed = Provider.of<BluetoothProvider>(context, listen: true).speed;
+      });
+    });
+  }
+
   void handleMeasurement() {
     setState(() {
       tz.initializeTimeZones();
@@ -123,7 +137,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void handleTimer() {
-    timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    timer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
       setState(() {
         elapsedTime++;
         coordinates.add(LatLng(
@@ -279,8 +293,7 @@ class _MainScreenState extends State<MainScreen> {
                   color: Colors.white,
                   child: Padding(
                     padding: const EdgeInsets.all(10.0),
-                    child: Text(
-                        'パワー: ${Provider.of<BluetoothProvider>(context, listen: true).power} w',
+                    child: Text('パワー: ${power} w',
                         style: const TextStyle(
                             fontSize: 25, fontWeight: FontWeight.bold)),
                   ),
@@ -301,8 +314,7 @@ class _MainScreenState extends State<MainScreen> {
                             constraints: BoxConstraints(
                               maxWidth: 250,
                             ),
-                            child: Text(
-                                'スピード: ${Provider.of<BluetoothProvider>(context, listen: true).speed} m/s',
+                            child: Text('スピード: ${speed} m/s',
                                 style: const TextStyle(
                                     fontSize: 25, fontWeight: FontWeight.bold)),
                           ),
@@ -317,8 +329,7 @@ class _MainScreenState extends State<MainScreen> {
                   color: Colors.white,
                   child: Padding(
                     padding: const EdgeInsets.all(10.0),
-                    child: Text(
-                        'ペラ回転数： ${Provider.of<BluetoothProvider>(context, listen: true).rpm} rpm',
+                    child: Text('ペラ回転数： ${rpm} rpm',
                         style: const TextStyle(
                           fontSize: 25,
                           fontWeight: FontWeight.bold,

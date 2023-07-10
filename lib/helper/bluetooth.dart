@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:external_path/external_path.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ class BluetoothProvider extends ChangeNotifier {
   bool watchLog = false;
 
   // Parameter
+  String time = '0';
   String power = 'EEE.EE';
   String speed = 'EEE.EE';
   String rpm = 'EEE.EE';
@@ -106,29 +108,41 @@ class BluetoothProvider extends ChangeNotifier {
         characteristicId: Uuid.parse('6e400003-b5a3-f393-e0a9-e50e24dcca9e'),
         serviceId: Uuid.parse('6e400001-b5a3-f393-e0a9-e50e24dcca9e'),
         deviceId: device.id);
+    final _receivedData = <int>[];
+    List<String?> appData = List.filled(3, null, growable: false);
     final readData = flutterReactiveBle
         .subscribeToCharacteristic(txCharacteristic)
         .listen((data) {
-      // log = '${DateTime.now()}: ${String.fromCharCodes(data)}';
-      notifyListeners();
-      rpm = String.fromCharCodes(data).split(',')[1];
-      notifyListeners();
-      power = String.fromCharCodes(data).split(',')[2];
-      notifyListeners();
-      speed = String.fromCharCodes(data).split(',')[3];
-      notifyListeners();
-      lat = String.fromCharCodes(data).split(',')[4];
-      notifyListeners();
-      lng = String.fromCharCodes(data).split(',')[5];
+      String decodedData = utf8.decode(data);
+      if (decodedData.contains("app1:")) {
+        appData[0] = decodedData;
+      }
+      if (decodedData.contains("app2:")) {
+        appData[1] = decodedData;
+      }
+      if (decodedData.contains("app3:")) {
+        appData[2] = decodedData;
+      }
+      if (!appData.contains(null)) {
+        time = appData[0]!.split(',')[2];
+        notifyListeners();
+        rpm = appData[0]!.split(',')[4];
+        notifyListeners();
+        power = appData[0]!.split(',')[5];
+        notifyListeners();
+        speed = appData[2]!.split(',')[8];
+        notifyListeners();
+        appData = List.filled(3, null, growable: false);
+      }
       notifyListeners();
       if (watchLog == true) {
         logs.add({
-          'time': '${String.fromCharCodes(data).split(',')[0]}',
-          'rpm': '${String.fromCharCodes(data).split(',')[1]}',
-          'power': '${String.fromCharCodes(data).split(',')[2]}',
-          'speed': '${String.fromCharCodes(data).split(',')[3]}',
-          'lat': '${String.fromCharCodes(data).split(',')[4]}',
-          'lng': '${String.fromCharCodes(data).split(',')[5]}',
+          'time': '${time}',
+          'rpm': '${rpm}',
+          'power': '${power}',
+          'speed': '${speed}',
+          // 'lat': '${splitInput[13]}',
+          // 'lng': '${splitInput[14]}'
         });
       }
       notifyListeners();
