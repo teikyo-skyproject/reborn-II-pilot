@@ -132,6 +132,16 @@ class BluetoothProvider extends ChangeNotifier {
         notifyListeners();
         speed = appData[2]!.split(',')[8];
         notifyListeners();
+
+        // GPS data
+        lat = (appData[1]!.split(',')[4]).replaceAll("+", "");
+        notifyListeners();
+        lng = (appData[1]!.split(',')[5]).replaceAll("+", "");
+        notifyListeners();
+        deg = appData[1]!.split(",")[8].split(".")[0];
+        notifyListeners();
+        log = "${appData[1]!.split(",")[7]}, ${appData[1]!.split(",")[8]}";
+        notifyListeners();
         appData = List.filled(3, null, growable: false);
       }
       notifyListeners();
@@ -141,8 +151,9 @@ class BluetoothProvider extends ChangeNotifier {
           'rpm': '${rpm}',
           'power': '${power}',
           'speed': '${speed}',
-          // 'lat': '${splitInput[13]}',
-          // 'lng': '${splitInput[14]}'
+          'lat': '${lat}',
+          'lng': '${lng}',
+          'deg': '${deg}',
         });
       }
       notifyListeners();

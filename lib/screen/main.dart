@@ -29,10 +29,14 @@ class _MainScreenState extends State<MainScreen> {
   bool isTimerStarted = false;
   int elapsedTime = 0;
   Timer? timer;
+  Timer? sec1Timer;
   List<LatLng> coordinates = [];
   String rpm = 'EEE.EE';
   String power = 'EEE.EE';
   String speed = 'EEE.EE';
+  double lat = 35.28996558322712;
+  double lng = 136.251955302951;
+  String deg = '0';
 
   // Map Setup
   MapController mapController = MapController();
@@ -106,6 +110,16 @@ class _MainScreenState extends State<MainScreen> {
         rpm = Provider.of<BluetoothProvider>(context, listen: true).rpm;
         power = Provider.of<BluetoothProvider>(context, listen: true).power;
         speed = Provider.of<BluetoothProvider>(context, listen: true).speed;
+        lat = double.parse(
+            Provider.of<BluetoothProvider>(context, listen: true).lat);
+        lng = double.parse(
+            Provider.of<BluetoothProvider>(context, listen: true).lng);
+        deg = Provider.of<BluetoothProvider>(context, listen: true).deg;
+      });
+    });
+    sec1Timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      setState(() {
+        mapController.move(LatLng(lat, lng), 14.0);
       });
     });
   }
@@ -137,21 +151,10 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void handleTimer() {
-    timer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+    timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         elapsedTime++;
-        coordinates.add(LatLng(
-            double.parse(
-                Provider.of<BluetoothProvider>(context, listen: true).lat),
-            double.parse(
-                Provider.of<BluetoothProvider>(context, listen: true).lng)));
-        mapController.move(
-            LatLng(
-                double.parse(
-                    Provider.of<BluetoothProvider>(context, listen: true).lat),
-                double.parse(
-                    Provider.of<BluetoothProvider>(context, listen: true).lng)),
-            14.0);
+        coordinates.add(LatLng(lat, lng));
       });
     });
   }
@@ -168,13 +171,7 @@ class _MainScreenState extends State<MainScreen> {
               FlutterMap(
                 mapController: mapController,
                 options: MapOptions(
-                  center: LatLng(
-                      double.parse(
-                          Provider.of<BluetoothProvider>(context, listen: true)
-                              .lat),
-                      double.parse(
-                          Provider.of<BluetoothProvider>(context, listen: true)
-                              .lng)),
+                  center: LatLng(lat, lng),
                   zoom: 14.0,
                   interactiveFlags: InteractiveFlag.all,
                   enableScrollWheel: true,
@@ -190,24 +187,11 @@ class _MainScreenState extends State<MainScreen> {
                   MarkerLayer(
                     markers: [
                       Marker(
-                          point: LatLng(
-                              double.parse(Provider.of<BluetoothProvider>(
-                                      context,
-                                      listen: true)
-                                  .lat),
-                              double.parse(Provider.of<BluetoothProvider>(
-                                      context,
-                                      listen: true)
-                                  .lng)),
+                          point: LatLng(lat, lng),
                           width: 60,
                           height: 60,
                           builder: (ctx) => Transform.rotate(
-                                angle: int.parse(Provider.of<BluetoothProvider>(
-                                            context,
-                                            listen: true)
-                                        .deg) *
-                                    pi /
-                                    180,
+                                angle: int.parse(deg) * pi / 180,
                                 child: SvgPicture.asset(
                                   'images/airplane.svg',
                                   width: 60,
