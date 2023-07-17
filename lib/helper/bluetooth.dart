@@ -126,7 +126,8 @@ class BluetoothProvider extends ChangeNotifier {
       if (!appData.contains(null)) {
         time = appData[0]!.split(',')[2];
         notifyListeners();
-        rpm = appData[0]!.split(',')[4];
+        rpm = appData[0]!
+            .split(',')[4]; //appData[0]!.split(",").indexOf("P") + 1]
         notifyListeners();
         power = appData[0]!.split(',')[5];
         notifyListeners();
@@ -134,13 +135,19 @@ class BluetoothProvider extends ChangeNotifier {
         notifyListeners();
 
         // GPS data
-        lat = (appData[1]!.split(',')[4]).replaceAll("+", "");
-        notifyListeners();
-        lng = (appData[1]!.split(',')[5]).replaceAll("+", "");
-        notifyListeners();
+        if (appData[1]!.split(',')[4].contains("+")) {
+          lat = (appData[1]!.split(',')[4]).replaceAll("+", "");
+          notifyListeners();
+        }
+        if (appData[1]!.split(',')[5].contains("+")) {
+          lng = (appData[1]!.split(',')[5]).replaceAll("+", "");
+          notifyListeners();
+        }
         deg = appData[1]!.split(",")[8].split(".")[0];
         notifyListeners();
-        log = "${appData[1]!.split(",")[7]}, ${appData[1]!.split(",")[8]}";
+        log = appData[0]!
+            .split(',')[appData[0]!.split(",").indexOf("P") + 1]
+            .toString();
         notifyListeners();
         appData = List.filled(3, null, growable: false);
       }

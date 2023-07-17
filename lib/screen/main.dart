@@ -28,6 +28,7 @@ class _MainScreenState extends State<MainScreen> {
   bool isMeasuring = false; // 計測開始・停止のフラグ
   bool isTimerStarted = false;
   int elapsedTime = 0;
+  Timer? lifecyecleTimer;
   Timer? timer;
   Timer? sec1Timer;
   List<LatLng> coordinates = [];
@@ -36,7 +37,7 @@ class _MainScreenState extends State<MainScreen> {
   String speed = 'EEE.EE';
   double lat = 35.28996558322712;
   double lng = 136.251955302951;
-  String deg = '0';
+  int deg = 0;
 
   // Map Setup
   MapController mapController = MapController();
@@ -48,6 +49,12 @@ class _MainScreenState extends State<MainScreen> {
     _initializePlatformSpecifics();
     mapController = MapController();
     lifecycle();
+  }
+
+  @override
+  void dispose() {
+    lifecyecleTimer?.cancel();
+    super.dispose();
   }
 
   void _requestIOSPermission() {
@@ -105,20 +112,27 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void lifecycle() {
-    timer = Timer.periodic(Duration(milliseconds: 500), (timer) {
+    lifecyecleTimer =
+        Timer.periodic(Duration(milliseconds: 500), (lifecycleTime) {
       setState(() {
         rpm = Provider.of<BluetoothProvider>(context, listen: true).rpm;
         power = Provider.of<BluetoothProvider>(context, listen: true).power;
         speed = Provider.of<BluetoothProvider>(context, listen: true).speed;
-        lat = double.parse(
+        double? newLat = double.tryParse(
             Provider.of<BluetoothProvider>(context, listen: true).lat);
-        lng = double.parse(
+        if (newLat != null) {
+          lat = newLat;
+        }
+        double? newLng = double.tryParse(
             Provider.of<BluetoothProvider>(context, listen: true).lng);
-        deg = Provider.of<BluetoothProvider>(context, listen: true).deg;
-      });
-    });
-    sec1Timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      setState(() {
+        if (newLng != null) {
+          lng = newLng;
+        }
+        int? newDeg = int.tryParse(
+            Provider.of<BluetoothProvider>(context, listen: true).deg);
+        if (newDeg != null) {
+          deg = newDeg;
+        }
         mapController.move(LatLng(lat, lng), 14.0);
       });
     });
@@ -191,7 +205,7 @@ class _MainScreenState extends State<MainScreen> {
                           width: 60,
                           height: 60,
                           builder: (ctx) => Transform.rotate(
-                                angle: int.parse(deg) * pi / 180,
+                                angle: deg * pi / 180,
                                 child: SvgPicture.asset(
                                   'images/airplane.svg',
                                   width: 60,
@@ -312,7 +326,7 @@ class _MainScreenState extends State<MainScreen> {
                 child: Container(
                   color: Colors.white,
                   child: Padding(
-                    padding: const EdgeInsets.all(10.0),
+                    padding: EdgeInsets.all(10.0),
                     child: Text('ペラ回転数： ${rpm} rpm',
                         style: const TextStyle(
                           fontSize: 25,
