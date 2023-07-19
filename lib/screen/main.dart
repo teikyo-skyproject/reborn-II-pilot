@@ -12,7 +12,6 @@ import 'package:intl/intl.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
-import 'dart:math';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -48,7 +47,9 @@ class _MainScreenState extends State<MainScreen> {
     _requestIOSPermission();
     _initializePlatformSpecifics();
     mapController = MapController();
-    lifecycle();
+    WidgetsBinding.instance!.addPostFrameCallback((_) {
+      lifecycle();
+    });
   }
 
   @override
@@ -112,30 +113,34 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void lifecycle() {
-    lifecyecleTimer =
-        Timer.periodic(Duration(milliseconds: 500), (lifecycleTime) {
-      setState(() {
-        rpm = Provider.of<BluetoothProvider>(context, listen: true).rpm;
-        power = Provider.of<BluetoothProvider>(context, listen: true).power;
-        speed = Provider.of<BluetoothProvider>(context, listen: true).speed;
-        double? newLat = double.tryParse(
-            Provider.of<BluetoothProvider>(context, listen: true).lat);
-        if (newLat != null) {
-          lat = newLat;
-        }
-        double? newLng = double.tryParse(
-            Provider.of<BluetoothProvider>(context, listen: true).lng);
-        if (newLng != null) {
-          lng = newLng;
-        }
-        int? newDeg = int.tryParse(
-            Provider.of<BluetoothProvider>(context, listen: true).deg);
-        if (newDeg != null) {
-          deg = newDeg;
-        }
-        mapController.move(LatLng(lat, lng), 14.0);
+    if (mounted) {
+      lifecyecleTimer =
+          Timer.periodic(Duration(milliseconds: 500), (lifecycleTime) {
+        setState(() {
+          rpm = Provider.of<BluetoothProvider>(context, listen: true).rpm;
+          power = Provider.of<BluetoothProvider>(context, listen: true).power;
+          speed = Provider.of<BluetoothProvider>(context, listen: true).speed;
+          double? newLat = double.tryParse(
+              Provider.of<BluetoothProvider>(context, listen: true).lat);
+          if (newLat != null) {
+            lat = newLat;
+          }
+          double? newLng = double.tryParse(
+              Provider.of<BluetoothProvider>(context, listen: true).lng);
+          if (newLng != null) {
+            lng = newLng;
+          }
+          int? newDeg = int.tryParse(
+              Provider.of<BluetoothProvider>(context, listen: true).deg);
+          if (newDeg != null) {
+            deg = newDeg;
+          }
+          if (newLng != null && newLat != null) {
+            mapController.move(LatLng(newLat, newLng), 14.0);
+          }
+        });
       });
-    });
+    }
   }
 
   void handleMeasurement() {
@@ -171,6 +176,10 @@ class _MainScreenState extends State<MainScreen> {
         coordinates.add(LatLng(lat, lng));
       });
     });
+  }
+
+  void handleDisconnect() {
+    Provider.of<BluetoothProvider>(context, listen: true).disconnectToDevice();
   }
 
   @override
@@ -261,7 +270,18 @@ class _MainScreenState extends State<MainScreen> {
                                         fontWeight: FontWeight.bold),
                                   ),
                                 ),
-                              )
+                              ),
+                              ElevatedButton(
+                                  onPressed: () => handleDisconnect(),
+                                  style: ElevatedButton.styleFrom(
+                                    minimumSize: const Size(120, 40),
+                                  ),
+                                  child: const Text(
+                                    '切断',
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold),
+                                  )),
                             ],
                           )
                         else

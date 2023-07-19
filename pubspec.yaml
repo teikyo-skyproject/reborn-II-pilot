@@ -49,6 +49,7 @@ dependencies:
   flutter_hooks: ^0.18.6
   external_path: ^1.0.3
   path_provider: ^2.0.15
+  flutter_cache_manager: ^3.3.1
 
 dev_dependencies:
   flutter_test:

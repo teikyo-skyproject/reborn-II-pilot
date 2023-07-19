@@ -32,6 +32,7 @@ class BluetoothProvider extends ChangeNotifier {
 
   // Connection related
   bool connectedSafety = false;
+  bool disconnectTriggered = false;
   late StreamSubscription<ConnectionStateUpdate> connection;
   StreamSubscription<List<int>>? readData;
 
@@ -79,15 +80,14 @@ class BluetoothProvider extends ChangeNotifier {
       notifyListeners();
     }
     connection = flutterReactiveBle
-        .connectToDevice(
-            id: device.id, connectionTimeout: Duration(seconds: 10))
-        .listen((connectionState) {
+        .connectToDevice(id: device.id, connectionTimeout: Duration(seconds: 5))
+        .listen((connectionState) async {
       log = 'Connection state $connectionState';
       notifyListeners();
       if (connectionState.connectionState == DeviceConnectionState.connected) {
         log = 'Connected';
         connectedSafety = true;
-        flutterReactiveBle.requestMtu(deviceId: device.id, mtu: 250);
+        await flutterReactiveBle.requestMtu(deviceId: device.id, mtu: 250);
         if (!completer.isCompleted) {
           completer.complete();
         }
@@ -96,6 +96,9 @@ class BluetoothProvider extends ChangeNotifier {
     }, onError: (dynamic error) {
       log = 'Error $error';
       connectedSafety = false;
+      // if (!disconnectTriggered) {
+      //   connectToDevice(device);
+      // }
     });
     return completer.future;
   }
@@ -108,71 +111,67 @@ class BluetoothProvider extends ChangeNotifier {
         characteristicId: Uuid.parse('6e400003-b5a3-f393-e0a9-e50e24dcca9e'),
         serviceId: Uuid.parse('6e400001-b5a3-f393-e0a9-e50e24dcca9e'),
         deviceId: device.id);
-    final _receivedData = <int>[];
     List<String?> appData = List.filled(3, null, growable: false);
-    final readData = flutterReactiveBle
+    readData = flutterReactiveBle
         .subscribeToCharacteristic(txCharacteristic)
         .listen((data) {
       String decodedData = utf8.decode(data);
-      if (decodedData.contains("app1:")) {
-        appData[0] = decodedData;
-      }
-      if (decodedData.contains("app2:")) {
-        appData[1] = decodedData;
-      }
-      if (decodedData.contains("app3:")) {
-        appData[2] = decodedData;
-      }
-      if (!appData.contains(null)) {
-        time = appData[0]!.split(',')[2];
-        notifyListeners();
-        rpm = appData[0]!
-            .split(',')[4]; //appData[0]!.split(",").indexOf("P") + 1]
-        notifyListeners();
-        power = appData[0]!.split(',')[5];
-        notifyListeners();
-        speed = appData[2]!.split(',')[8];
-        notifyListeners();
+      try {
+        if (decodedData.contains("app1:")) {
+          appData[0] = decodedData;
+        } else if (decodedData.contains("app2:")) {
+          appData[1] = decodedData;
+        } else if (decodedData.contains("app3:")) {
+          appData[2] = decodedData;
+        }
+        List<String> splitData0 = appData[0]!.split(',');
+        List<String> splitData1 = appData[1]!.split(',');
+        List<String> splitData2 = appData[2]!.split(',');
+        time = splitData0[2];
+        rpm = splitData0[4];
+        power = splitData0[5];
+        speed = splitData2[8];
 
         // GPS data
         if (appData[1]!.split(',')[4].contains("+")) {
           lat = (appData[1]!.split(',')[4]).replaceAll("+", "");
-          notifyListeners();
         }
         if (appData[1]!.split(',')[5].contains("+")) {
           lng = (appData[1]!.split(',')[5]).replaceAll("+", "");
-          notifyListeners();
         }
         deg = appData[1]!.split(",")[8].split(".")[0];
-        notifyListeners();
-        log = appData[0]!
-            .split(',')[appData[0]!.split(",").indexOf("P") + 1]
-            .toString();
-        notifyListeners();
+        // log = '' // 受信中と表示
         appData = List.filled(3, null, growable: false);
-      }
-      notifyListeners();
-      if (watchLog == true) {
-        logs.add({
-          'time': '${time}',
-          'rpm': '${rpm}',
-          'power': '${power}',
-          'speed': '${speed}',
-          'lat': '${lat}',
-          'lng': '${lng}',
-          'deg': '${deg}',
-        });
+        notifyListeners();
+        if (watchLog == true) {
+          logs.add({
+            'time': '${time}',
+            'rpm': '${rpm}',
+            'power': '${power}',
+            'speed': '${speed}',
+            'lat': '${lat}',
+            'lng': '${lng}',
+            'deg': '${deg}',
+          });
+        }
+      } catch (e) {
+        log = 'Data parsing error: $e';
       }
       notifyListeners();
     }, onError: (dynamic error) {
       log = 'Error $error';
       connectedSafety = false;
       notifyListeners();
+      // if (!disconnectTriggered) {
+      //   // disconnectTriggeredは手動でディスコネクトを行ったときにtrueに設定します。
+      //   connectToDevice(device);
+      // }
     });
   }
 
   // Disconnect from the device
   disconnectToDevice() async {
+    // disconnectTriggered = true;
     log = 'Disconnecting';
     await readData?.cancel();
     await connection.cancel();
