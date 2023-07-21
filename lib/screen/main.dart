@@ -204,8 +204,7 @@ class _MainScreenState extends State<MainScreen> {
                   TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'dev.fleaflet.flutter_map.example',
-                    tileProvider: FMTC.instance('mapStore').getTileProvider(),
+                    userAgentPackageName: 'com.example.app',
                   ),
                   MarkerLayer(
                     markers: [
@@ -285,19 +284,25 @@ class _MainScreenState extends State<MainScreen> {
                             ],
                           )
                         else
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => const ScanScreen()),
-                              );
-                            },
-                            child: const Text(
-                              'Bluetooth接続',
-                              style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
+                          Column(
+                            children: [
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (context) =>
+                                            const ScanScreen()),
+                                  );
+                                },
+                                child: const Text(
+                                  'Bluetooth接続',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
                           )
                       ],
                     ),

@@ -8,10 +8,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:rxdart/rxdart.dart';
 
 class BluetoothProvider extends ChangeNotifier {
   // ReactiveBle instance
   final flutterReactiveBle = FlutterReactiveBle();
+  late IO.Socket socket;
   String log = 'this is log';
   List<Map<String, String>> logs = [];
   bool watchLog = false;
@@ -87,6 +90,13 @@ class BluetoothProvider extends ChangeNotifier {
       if (connectionState.connectionState == DeviceConnectionState.connected) {
         log = 'Connected';
         connectedSafety = true;
+        socket = IO.io('ws://160.251.13.11',
+            IO.OptionBuilder().setTransports(['websocket']).build());
+        socket.onConnect((_) {
+          socket.emit('message', 'Connect WebSocket');
+          log = 'WebSocket Emitted';
+          notifyListeners();
+        });
         await flutterReactiveBle.requestMtu(deviceId: device.id, mtu: 250);
         if (!completer.isCompleted) {
           completer.complete();
@@ -112,60 +122,41 @@ class BluetoothProvider extends ChangeNotifier {
         serviceId: Uuid.parse('6e400001-b5a3-f393-e0a9-e50e24dcca9e'),
         deviceId: device.id);
     List<String?> appData = List.filled(3, null, growable: false);
-    readData = flutterReactiveBle
+    final readData = flutterReactiveBle
         .subscribeToCharacteristic(txCharacteristic)
-        .listen((data) {
-      String decodedData = utf8.decode(data);
-      try {
-        if (decodedData.contains("app1:")) {
-          appData[0] = decodedData;
-        } else if (decodedData.contains("app2:")) {
-          appData[1] = decodedData;
-        } else if (decodedData.contains("app3:")) {
-          appData[2] = decodedData;
+        .bufferCount(3)
+        .listen((dataList) {
+      // データリストは3つのデータパケットを含む
+      final completeData = dataList.expand((x) => x).toList();
+      final stringData = String.fromCharCodes(completeData);
+      log = 'Received: $stringData';
+      final splitData = stringData.split(',');
+      socket.emit('message', stringData);
+      if (splitData.contains("app1:") &&
+          splitData.contains("app2:") &&
+          splitData.contains("app3:")) {
+        try {
+          rpm = splitData[splitData.indexOf("app1:") + 4];
+        } catch (e) {
+          log = 'Error: $e';
         }
-        List<String> splitData0 = appData[0]!.split(',');
-        List<String> splitData1 = appData[1]!.split(',');
-        List<String> splitData2 = appData[2]!.split(',');
-        time = splitData0[2];
-        rpm = splitData0[4];
-        power = splitData0[5];
-        speed = splitData2[8];
-
-        // GPS data
-        if (appData[1]!.split(',')[4].contains("+")) {
-          lat = (appData[1]!.split(',')[4]).replaceAll("+", "");
+        try {
+          power = splitData[splitData.indexOf("app1:") + 5];
+        } catch (e) {
+          log = 'Error: $e';
         }
-        if (appData[1]!.split(',')[5].contains("+")) {
-          lng = (appData[1]!.split(',')[5]).replaceAll("+", "");
+        try {
+          speed = splitData[splitData.indexOf("app3:") + 8];
+        } catch (e) {
+          log = 'Error: $e';
         }
-        deg = appData[1]!.split(",")[8].split(".")[0];
-        // log = '' // 受信中と表示
-        appData = List.filled(3, null, growable: false);
-        notifyListeners();
-        if (watchLog == true) {
-          logs.add({
-            'time': '${time}',
-            'rpm': '${rpm}',
-            'power': '${power}',
-            'speed': '${speed}',
-            'lat': '${lat}',
-            'lng': '${lng}',
-            'deg': '${deg}',
-          });
-        }
-      } catch (e) {
-        log = 'Data parsing error: $e';
+      } else {
+        log = 'Data not enugh';
       }
       notifyListeners();
     }, onError: (dynamic error) {
       log = 'Error $error';
-      connectedSafety = false;
       notifyListeners();
-      // if (!disconnectTriggered) {
-      //   // disconnectTriggeredは手動でディスコネクトを行ったときにtrueに設定します。
-      //   connectToDevice(device);
-      // }
     });
   }
 
