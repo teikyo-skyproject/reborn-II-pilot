@@ -53,8 +53,10 @@ void main() {
 
     for (var i = 0; i < cases.length; i++) {
       expect(
-          BluetoothProvider().isValidLatLng(double.tryParse(cases[i]['lat']),
-              double.tryParse(cases[i]['lng']), int.tryParse(cases[i]['deg'])),
+          BluetoothProvider().isValidLatLng(
+              double.tryParse(cases[i]['lat']),
+              double.tryParse(cases[i]['lng']),
+              double.tryParse(cases[i]['deg'])),
           cases[i]['expected']);
     }
   });
