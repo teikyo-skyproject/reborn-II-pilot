@@ -83,7 +83,18 @@ class BluetoothProvider extends ChangeNotifier {
       notifyListeners();
     }
     connection = flutterReactiveBle
-        .connectToDevice(id: device.id, connectionTimeout: Duration(seconds: 5))
+        .connectToDevice(
+            id: device.id, connectionTimeout: Duration(seconds: 10))
+        // .connectToAdvertisingDevice(
+        //     id: device.id,
+        //     withServices: [Uuid.parse('6e400001-b5a3-f393-e0a9-e50e24dcca9e')],
+        //     prescanDuration: Duration(seconds: 5),
+        //     servicesWithCharacteristicsToDiscover: {
+        //       Uuid.parse('6e400001-b5a3-f393-e0a9-e50e24dcca9e'): [
+        //         Uuid.parse('6e400003-b5a3-f393-e0a9-e50e24dcca9e')
+        //       ]
+        //     },
+        //     connectionTimeout: Duration(seconds: 2))
         .listen((connectionState) async {
       log = 'Connection state $connectionState';
       notifyListeners();
@@ -97,6 +108,10 @@ class BluetoothProvider extends ChangeNotifier {
           log = 'WebSocket Emitted';
           notifyListeners();
         });
+        socket.onDisconnect((_) {
+          log = 'WebSocket Disconnected';
+          notifyListeners();
+        });
         await flutterReactiveBle.requestMtu(deviceId: device.id, mtu: 250);
         if (!completer.isCompleted) {
           completer.complete();
@@ -106,9 +121,6 @@ class BluetoothProvider extends ChangeNotifier {
     }, onError: (dynamic error) {
       log = 'Error $error';
       connectedSafety = false;
-      // if (!disconnectTriggered) {
-      //   connectToDevice(device);
-      // }
     });
     return completer.future;
   }
@@ -129,7 +141,8 @@ class BluetoothProvider extends ChangeNotifier {
       // データリストは3つのデータパケットを含む
       final completeData = dataList.expand((x) => x).toList();
       final stringData = String.fromCharCodes(completeData);
-      log = 'Received: $stringData';
+      // log = 'Received: $stringData';
+      // log = 'Data Successfully Received';
       final splitData = stringData.split(',');
       socket.emit('message', stringData);
       if (splitData.contains("app1:") &&
@@ -150,6 +163,41 @@ class BluetoothProvider extends ChangeNotifier {
         } catch (e) {
           log = 'Error: $e';
         }
+        try {
+          if (splitData[splitData.indexOf("app2:") + 4].contains("+") &&
+              splitData[splitData.indexOf("app2:") + 5].contains("+")) {
+            String newLat = splitData[splitData.indexOf("app2:") + 4];
+            String newLng = splitData[splitData.indexOf("app2:") + 5];
+            String newDeg = splitData[splitData.indexOf("app2:") + 8];
+            if (isValidLatLng(double.parse(newLat), double.parse(newLng),
+                double.parse(newDeg))) {
+              lat = newLat;
+              lng = newLng;
+              deg = newDeg;
+            }
+          }
+        } catch (e) {
+          log = 'Error: $e';
+        }
+        // try {
+        //   if (splitData[splitData.indexOf("app2:") + 4].contains("+")) {
+        //     lat = splitData[splitData.indexOf("app2:") + 4];
+        //   }
+        // } catch (e) {
+        //   log = 'Error: $e';
+        // }
+        // try {
+        //   if (splitData[splitData.indexOf("app2:") + 5].contains("+")) {
+        //     lng = splitData[splitData.indexOf("app2:") + 5];
+        //   }
+        // } catch (e) {
+        //   log = 'Error: $e';
+        // }
+        // try {
+        //   deg = splitData[splitData.indexOf("app2:") + 8];
+        // } catch (e) {
+        //   log = 'Error: $e';
+        // }
       } else {
         log = 'Data not enugh';
       }
@@ -160,9 +208,23 @@ class BluetoothProvider extends ChangeNotifier {
     });
   }
 
+  bool isValidLatLng(double? lat, double? lng, double? deg) {
+    if (lat == null ||
+        lat < -90.0 ||
+        lat > 90.0 ||
+        deg == null ||
+        deg < 0.0 ||
+        deg > 360.0) {
+      return false;
+    }
+    if (lng == null || lng < -180.0 || lng > 180.0) {
+      return false;
+    }
+    return true;
+  }
+
   // Disconnect from the device
   disconnectToDevice() async {
-    // disconnectTriggered = true;
     log = 'Disconnecting';
     await readData?.cancel();
     await connection.cancel();
@@ -177,6 +239,18 @@ class BluetoothProvider extends ChangeNotifier {
     } else {
       watchLog = false;
     }
+  }
+
+  reconectWebSocket() async {
+    socket.connect();
+    log = 'WebSocket reconnect';
+    notifyListeners();
+  }
+
+  disconnectWebSocket() async {
+    socket.disconnect();
+    log = 'WebSocket Disconnected';
+    notifyListeners();
   }
 
   // Save log

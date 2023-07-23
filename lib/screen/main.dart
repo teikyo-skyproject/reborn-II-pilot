@@ -36,7 +36,7 @@ class _MainScreenState extends State<MainScreen> {
   String speed = 'EEE.EE';
   double lat = 35.28996558322712;
   double lng = 136.251955302951;
-  int deg = 0;
+  double deg = 0;
 
   // Map Setup
   MapController mapController = MapController();
@@ -120,24 +120,33 @@ class _MainScreenState extends State<MainScreen> {
           rpm = Provider.of<BluetoothProvider>(context, listen: true).rpm;
           power = Provider.of<BluetoothProvider>(context, listen: true).power;
           speed = Provider.of<BluetoothProvider>(context, listen: true).speed;
-          double? newLat = double.tryParse(
+          lat = double.parse(
               Provider.of<BluetoothProvider>(context, listen: true).lat);
-          if (newLat != null) {
-            lat = newLat;
-          }
-          double? newLng = double.tryParse(
-              Provider.of<BluetoothProvider>(context, listen: true).lng);
-          if (newLng != null) {
-            lng = newLng;
-          }
-          int? newDeg = int.tryParse(
+          lng = double.parse(
+            Provider.of<BluetoothProvider>(context, listen: true).lng,
+          );
+          deg = double.parse(
               Provider.of<BluetoothProvider>(context, listen: true).deg);
-          if (newDeg != null) {
-            deg = newDeg;
-          }
-          if (newLng != null && newLat != null) {
-            mapController.move(LatLng(newLat, newLng), 14.0);
-          }
+
+          // double? newLat = double.tryParse(
+          //     Provider.of<BluetoothProvider>(context, listen: true).lat);
+          // if (newLat != null) {
+          //   lat = newLat;
+          // }
+          // double? newLng = double.tryParse(
+          //     Provider.of<BluetoothProvider>(context, listen: true).lng);
+          // if (newLng != null) {
+          //   lng = newLng;
+          // }
+          // int? newDeg = int.tryParse(
+          //     Provider.of<BluetoothProvider>(context, listen: true).deg);
+          // if (newDeg != null) {
+          //   deg = newDeg;
+          // }
+          // if (newLng != null && newLat != null) {
+          //   mapController.move(LatLng(newLat, newLng), 14.0);
+          // }
+          mapController.move(LatLng(lat, lng), 14.0);
         });
       });
     }
@@ -213,7 +222,7 @@ class _MainScreenState extends State<MainScreen> {
                           width: 60,
                           height: 60,
                           builder: (ctx) => Transform.rotate(
-                                angle: deg * pi / 180,
+                                angle: deg * pi / 180.0,
                                 child: SvgPicture.asset(
                                   'images/airplane.svg',
                                   width: 60,
@@ -281,6 +290,20 @@ class _MainScreenState extends State<MainScreen> {
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold),
                                   )),
+                              ElevatedButton(
+                                  onPressed: () {
+                                    Provider.of<BluetoothProvider>(context,
+                                            listen: true)
+                                        .reconectWebSocket();
+                                  },
+                                  child: const Text('ws再接続')),
+                              ElevatedButton(
+                                  onPressed: () {
+                                    Provider.of<BluetoothProvider>(context,
+                                            listen: true)
+                                        .disconnectWebSocket();
+                                  },
+                                  child: const Text('ws切断')),
                             ],
                           )
                         else
@@ -327,8 +350,11 @@ class _MainScreenState extends State<MainScreen> {
                   bottom: 16,
                   child: Column(
                     children: [
-                      Text(
-                          '${Provider.of<BluetoothProvider>(context, listen: true).log}'),
+                      Container(
+                        width: 200,
+                        child: Text(
+                            '${Provider.of<BluetoothProvider>(context, listen: true).log}'),
+                      ),
                       Container(
                         color: Colors.white,
                         child: Padding(
