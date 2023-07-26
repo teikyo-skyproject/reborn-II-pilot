@@ -127,25 +127,6 @@ class _MainScreenState extends State<MainScreen> {
           );
           deg = double.parse(
               Provider.of<BluetoothProvider>(context, listen: true).deg);
-
-          // double? newLat = double.tryParse(
-          //     Provider.of<BluetoothProvider>(context, listen: true).lat);
-          // if (newLat != null) {
-          //   lat = newLat;
-          // }
-          // double? newLng = double.tryParse(
-          //     Provider.of<BluetoothProvider>(context, listen: true).lng);
-          // if (newLng != null) {
-          //   lng = newLng;
-          // }
-          // int? newDeg = int.tryParse(
-          //     Provider.of<BluetoothProvider>(context, listen: true).deg);
-          // if (newDeg != null) {
-          //   deg = newDeg;
-          // }
-          // if (newLng != null && newLat != null) {
-          //   mapController.move(LatLng(newLat, newLng), 14.0);
-          // }
           mapController.move(LatLng(lat, lng), 14.0);
         });
       });
@@ -238,7 +219,15 @@ class _MainScreenState extends State<MainScreen> {
                       Polyline(
                           points: coordinates,
                           color: Colors.blue,
-                          strokeWidth: 3.0)
+                          strokeWidth: 3.0),
+                      Polyline(points: [
+                        LatLng(35.29200671826664, 136.25410089667272),
+                        LatLng(35.4137191012542, 136.11774778263523)
+                      ], color: Colors.red, strokeWidth: 3.0),
+                      Polyline(points: [
+                        LatLng(35.29207844771564, 136.25454987209068),
+                        LatLng(35.23025002646102, 136.06847046082993)
+                      ], color: Colors.red, strokeWidth: 3.0),
                     ],
                   )
                 ],
